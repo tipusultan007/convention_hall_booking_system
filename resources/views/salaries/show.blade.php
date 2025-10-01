@@ -60,7 +60,7 @@
         <div class="card">
             <div class="card-header"><h4>Record a Payment</h4></div>
             <div class="card-body">
-                <form action="{{ route('salaries.payments.store', $monthlySalary->id) }}" method="POST">
+                <form action="{{ route('salary-payments.payments.store', $monthlySalary->id) }}" method="POST">
                     @csrf
                     <div class="mb-3">
                         <label for="payment_amount" class="form-label">Amount</label>
