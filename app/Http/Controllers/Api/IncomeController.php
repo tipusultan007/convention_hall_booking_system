@@ -9,10 +9,21 @@ use App\Http\Resources\IncomeResource;
 
 class IncomeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $incomes = Income::with('category')->latest()->paginate(20);
-        return IncomeResource::collection($incomes);
+        $query = Income::with('category');
+
+        // ** ADD THIS FILTERING LOGIC **
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('income_date', [$request->start_date, $request->end_date]);
+        }
+        if ($request->has('category_id')) {
+            $query->where('income_category_id', $request->category_id);
+        }
+        // ****************************
+
+        $expenses = $query->latest()->paginate(20);
+        return IncomeResource::collection($expenses);
     }
 
     public function show(Income $income)

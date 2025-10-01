@@ -17,10 +17,45 @@ use App\Http\Resources\BookingListResource; // Use this for the index
 
 class BookingController extends Controller
 {
-    public function index()
+    /**
+     * Display a paginated listing of the resource, with optional search and date filtering.
+     */
+    public function index(Request $request)
     {
-        $bookings = Booking::with('customer', 'bookingDates')->latest()->paginate(20);
-        return BookingResource::collection($bookings);
+        // Start with the base query and eager load relationships for efficiency
+        $query = Booking::with('customer', 'bookingDates');
+
+        // --- FILTERING LOGIC ---
+
+        // 1. Filter by Search Term
+        if ($request->filled('search')) {
+            $searchTerm = $request->query('search');
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('receipt_no', 'like', "%{$searchTerm}%")
+                    ->orWhere('event_type', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($searchTerm) {
+                        $customerQuery->where('name', 'like', "%{$searchTerm}%")
+                            ->orWhere('phone', 'like', "%{$searchTerm}%");
+                    });
+            });
+        }
+
+        // 2. Filter by Date Range
+        // This will filter bookings based on their EVENT dates.
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // This ensures that we only get bookings that have at least one event date within the range.
+            $query->whereHas('bookingDates', function ($dateQuery) use ($startDate, $endDate) {
+                $dateQuery->whereBetween('event_date', [$startDate, $endDate]);
+            });
+        }
+
+        // Apply ordering and pagination to the final query
+        $bookings = $query->latest('id')->paginate(20);
+
+        return BookingListResource::collection($bookings);
     }
     public function show(Booking $booking)
     {
@@ -60,14 +95,14 @@ class BookingController extends Controller
             $words = $numToBangla->bnWord($validatedData['total_amount']);
             $notesInWords = ucfirst($words) . ' টাকা মাত্র।';
         }
-        
+
         $booking = null;
         DB::transaction(function () use ($validatedData, $notesInWords, &$booking) {
             $customer = Customer::firstOrCreate(
                 ['phone' => $validatedData['customer_phone']],
                 ['name' => $validatedData['customer_name'], 'address' => $validatedData['customer_address']]
             );
-            
+
             $dueAmount = $validatedData['total_amount'] - ($validatedData['advance_amount'] ?? 0);
             $status = ($validatedData['advance_amount'] > 0) ? ($dueAmount <= 0 ? 'Paid' : 'Partially Paid') : 'Pending';
 

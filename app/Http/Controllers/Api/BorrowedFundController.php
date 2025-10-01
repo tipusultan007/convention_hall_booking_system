@@ -11,9 +11,20 @@ use Illuminate\Support\Facades\Validator;
 
 class BorrowedFundController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $funds = BorrowedFund::with('lender')->latest()->paginate(20);
+        $query = BorrowedFund::with('lender');
+
+        // ** ADD THIS FILTERING LOGIC **
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('date_borrowed', [$request->start_date, $request->end_date]);
+        }
+        if ($request->has('lender_id')) {
+            $query->where('lender_id', $request->lender_id);
+        }
+        // ****************************
+
+        $funds = $query->latest()->paginate(20);
         return BorrowedFundResource::collection($funds);
     }
 
@@ -36,7 +47,7 @@ class BorrowedFundController extends Controller
 
         $borrowedFund = BorrowedFund::create($validatedData);
         $borrowedFund->load('lender'); // Load relationship for the resource
-        
+
         return response(new BorrowedFundResource($borrowedFund), 201);
     }
 

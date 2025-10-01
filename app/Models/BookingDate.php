@@ -8,8 +8,11 @@ class BookingDate extends Model
 {
     protected $fillable = ['booking_id', 'event_date', 'time_slot'];
 
-public function booking()
-{
-    return $this->belongsTo(Booking::class);
-}
+    protected $casts = [
+        'event_date' => 'date', // <-- THIS IS THE FIX
+    ];
+    public function booking()
+    {
+        return $this->belongsTo(Booking::class);
+    }
 }

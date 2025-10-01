@@ -9,9 +9,20 @@ use App\Http\Resources\ExpenseResource;
 
 class ExpenseController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $expenses = Expense::with('category')->latest()->paginate(20);
+        $query = Expense::with('category');
+
+        // ** ADD THIS FILTERING LOGIC **
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('expense_date', [$request->start_date, $request->end_date]);
+        }
+        if ($request->has('category_id')) {
+            $query->where('expense_category_id', $request->category_id);
+        }
+        // ****************************
+
+        $expenses = $query->latest()->paginate(20);
         return ExpenseResource::collection($expenses);
     }
 
@@ -29,10 +40,10 @@ class ExpenseController extends Controller
         }
 
         $expense = Expense::create($validator->validated());
-        
+
         // Load the relationship before returning the resource
         $expense->load('category');
-        
+
         return new ExpenseResource($expense);
     }
 
@@ -63,10 +74,10 @@ class ExpenseController extends Controller
         }
 
         $expense->update($validator->validated());
-        
+
         // Load the relationship before returning the updated resource
         $expense->load('category');
-        
+
         return new ExpenseResource($expense);
     }
 
@@ -76,7 +87,7 @@ class ExpenseController extends Controller
     public function destroy(Expense $expense)
     {
         $expense->delete();
-        
+
         // Return a standard success response with no content
         return response()->noContent();
     }

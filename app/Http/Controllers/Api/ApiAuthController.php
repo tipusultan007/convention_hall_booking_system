@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class ApiAuthController extends Controller
 {
@@ -16,19 +18,29 @@ class ApiAuthController extends Controller
             'password' => 'required',
         ]);
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
-            return response()->json(['message' => 'Invalid login details'], 401);
+        $user = User::where('email', $request->email)->first();
+
+        // Check if user exists and the password is correct
+        if (! $user || ! Hash::check($request->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'email' => ['The provided credentials do not match our records.'],
+            ]);
         }
 
-        $user = User::where('email', $request['email'])->firstOrFail();
-        
         // Create a plain text token for the user
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // ** THIS IS THE CORRECT, COMPLETE RESPONSE **
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                // This is the crucial part that gets all permissions from the user's roles
+                'permissions' => $user->getAllPermissions()->pluck('name'),
+            ]
         ]);
     }
 

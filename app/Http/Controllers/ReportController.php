@@ -101,7 +101,7 @@ class ReportController extends Controller
         $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now()->endOfMonth();
 
         // --- CALCULATIONS (WITH CORRECTIONS) ---
-        
+
         // 1. **THE FIX**: Calculate Total Revenue based on payments received in the period
         $bookingPaymentsRevenue = BookingPayment::whereBetween('payment_date', [$startDate, $endDate])->sum('payment_amount');
         $otherIncome = Income::whereBetween('income_date', [$startDate, $endDate])->sum('amount');
@@ -116,18 +116,18 @@ class ReportController extends Controller
         $netProfit = $totalRevenue - $totalExpenses;
 
         // --- FETCH DETAILS FOR BREAKDOWN TABLES ---
-        
+
         // **THE FIX**: Fetch BookingPayment details instead of Booking details
         $bookingPaymentDetails = BookingPayment::with('booking.customer')
                                 ->whereBetween('payment_date', [$startDate, $endDate])
                                 ->latest('payment_date')
                                 ->get();
-        
+
         // The rest of the detail fetching is correct
         $otherIncomeDetails = Income::with('category')->whereBetween('income_date', [$startDate, $endDate])->latest('income_date')->get();
         $expensesDetails = \App\Models\Expense::with('category')->whereBetween('expense_date', [$startDate, $endDate])->latest('expense_date')->get();
         $salaryPaymentsDetails = \App\Models\SalaryPayment::with('monthlySalary.worker')->whereBetween('payment_date', [$startDate, $endDate])->latest('payment_date')->get();
-        
+
         return [
             'startDate' => $startDate, 'endDate' => $endDate,
             'totalRevenue' => $totalRevenue,
@@ -138,5 +138,46 @@ class ReportController extends Controller
             'expensesDetails' => $expensesDetails,
             'salaryPaymentsDetails' => $salaryPaymentsDetails,
         ];
+    }
+
+    /**
+     * Display a report of expenses grouped by category.
+     */
+    public function expenseReport(Request $request)
+    {
+        // Date filtering logic remains the same
+        $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::now()->startOfMonth();
+        $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now()->endOfMonth();
+
+        // 1. Fetch all 'debit' transactions that are of type 'Expense'
+        $expenseTransactions = Transaction::where('transactionable_type', Expense::class)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->with('transactionable.category') // Eager load the category through the relationship
+            ->get();
+
+        // 2. Group the transactions by category name and sum their amounts
+        $expensesByCategory = $expenseTransactions
+            ->groupBy('transactionable.category.name')
+            ->map(function ($group) {
+                return $group->sum('amount');
+            })
+            ->sortDesc(); // Sort by the highest spending category first
+
+        // 3. Calculate the total of these expenses to find percentages
+        $totalExpenses = $expensesByCategory->sum();
+
+        // 4. Prepare data specifically for Chart.js
+        $chartData = [
+            'labels' => $expensesByCategory->keys(),
+            'data' => $expensesByCategory->values(),
+        ];
+
+        return view('reports.expense_report', [
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'expensesByCategory' => $expensesByCategory,
+            'totalExpenses' => $totalExpenses,
+            'chartData' => json_encode($chartData), // Pass as a JSON string
+        ]);
     }
 }
